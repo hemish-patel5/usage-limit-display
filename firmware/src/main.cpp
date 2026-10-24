@@ -1,119 +1,78 @@
 
 #include <Arduino.h>
-#include <LiquidCrystal.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 
-// LCD pins: RS, E, D4, D5, D6, D7
-LiquidCrystal lcd(0, 1, 3, 4, 5, 6);
+const char* WIFI_SSID = "Hemish";
+const char* WIFI_PASSWORD = "Lalofrom9sari";
 
-// KY-040 encoder pins
-const int ENC_CLK = 7;
-const int ENC_DT  = 10;
-const int ENC_SW  = 20;
+const char* SERVER = "http://192.168.1.49:8765";
 
-int counter = 0;
+void fetchEndpoint(const char* path) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected");
+    return;
+  }
 
-// Rotary encoder state
-uint8_t previousState = 0;
-int8_t encoderSteps = 0;
+  HTTPClient http;
 
-// Button debounce
-bool lastButtonReading = HIGH;
-bool stableButtonState = HIGH;
-unsigned long lastButtonChange = 0;
+  String url = String(SERVER) + path;
 
-void updateDisplay() {
-  lcd.setCursor(0, 0);
-  lcd.print("Hello World!    ");
+  Serial.print("GET ");
+  Serial.println(url);
 
-  lcd.setCursor(0, 1);
-  lcd.print("                ");
-  lcd.setCursor(0, 1);
-  lcd.print("Counter: ");
-  lcd.print(counter);
+  http.begin(url);
+  http.setTimeout(5000);
+
+  int status = http.GET();
+
+  Serial.print("HTTP status: ");
+  Serial.println(status);
+
+  if (status == 200) {
+    Serial.println(http.getString());
+  } else {
+    Serial.println("Request failed");
+  }
+
+  http.end();
 }
 
 void setup() {
   Serial.begin(115200);
+  delay(1500);
 
-  pinMode(ENC_CLK, INPUT_PULLUP);
-  pinMode(ENC_DT, INPUT_PULLUP);
-  pinMode(ENC_SW, INPUT_PULLUP);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  delay(1000);
+  Serial.print("Connecting to WiFi");
 
-  lcd.begin(16, 2);
-  lcd.clear();
+  unsigned long start = millis();
 
-  previousState =
-      (digitalRead(ENC_CLK) << 1) |
-       digitalRead(ENC_DT);
+  while (
+    WiFi.status() != WL_CONNECTED &&
+    millis() - start < 20000
+  ) {
+    delay(500);
+    Serial.print(".");
+  }
 
-  updateDisplay();
-
-  Serial.println("LCD + KY-040 ready");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println();
+    Serial.println("WiFi connected!");
+    Serial.print("ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println();
+    Serial.println("WiFi connection failed");
+  }
 }
 
 void loop() {
-  // Quadrature encoder transition table
-  // Valid transitions contribute +1 or -1.
-  static const int8_t transitions[16] = {
-     0, -1,  1,  0,
-     1,  0,  0, -1,
-    -1,  0,  0,  1,
-     0,  1, -1,  0
-  };
+  fetchEndpoint("/usage");
+  fetchEndpoint("/image-limit");
 
-  uint8_t currentState =
-      (digitalRead(ENC_CLK) << 1) |
-       digitalRead(ENC_DT);
+  Serial.println("----------------");
 
-  if (currentState != previousState) {
-    uint8_t index =
-        (previousState << 2) | currentState;
-
-    encoderSteps += transitions[index];
-    previousState = currentState;
-
-    // Most KY-040 encoders produce four transitions
-    // per physical detent.
-    if (encoderSteps >= 4) {
-      counter++;
-      encoderSteps = 0;
-      updateDisplay();
-
-      Serial.print("Counter: ");
-      Serial.println(counter);
-    }
-    else if (encoderSteps <= -4) {
-      counter--;
-      encoderSteps = 0;
-      updateDisplay();
-
-      Serial.print("Counter: ");
-      Serial.println(counter);
-    }
-  }
-
-  // Read encoder push button
-  bool buttonReading = digitalRead(ENC_SW);
-
-  if (buttonReading != lastButtonReading) {
-    lastButtonChange = millis();
-  }
-
-  if (millis() - lastButtonChange > 30) {
-    if (buttonReading != stableButtonState) {
-      stableButtonState = buttonReading;
-
-      if (stableButtonState == LOW) {
-        counter = 0;
-        encoderSteps = 0;
-        updateDisplay();
-
-        Serial.println("Counter reset!");
-      }
-    }
-  }
-
-  lastButtonReading = buttonReading;
+  delay(10000);
 }
