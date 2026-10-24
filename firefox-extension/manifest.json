@@ -7,14 +7,20 @@
   "permissions": [
     "storage",
     "alarms",
-    "tabs"
+    "tabs",
+    "webRequest",
+    "webRequestBlocking",
+    "webRequestFilterResponse"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
     "http://127.0.0.1:8766/*"
   ],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js",
+      "diagnostic.js"
+    ]
   },
   "action": {
     "default_title": "ChatGPT Image Limits",

@@ -85,3 +85,79 @@ browser.runtime.onMessage.addListener(async message => {
     };
   }
 });
+
+/*
+ * Temporary image-limit notification diagnostic.
+ * Add to the bottom of content.js.
+ */
+
+(() => {
+  let lastReported = "";
+
+  function checkVisibleImageLimit() {
+    if (!document.body) return;
+
+    const text = document.body.innerText
+      .replace(/[\u00a0\u202f]/g, " ")
+      .replace(/[’‘]/g, "'")
+      .replace(/\s+/g, " ");
+
+    if (!/you're out of images/i.test(text)) {
+      return;
+    }
+
+    const match = text.match(
+      /you're out of image creations for now.{0,200}?try again tomorrow at\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i
+    );
+
+    if (!match) return;
+
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+
+    if (
+      hour < 1 || hour > 12 ||
+      minute < 0 || minute > 59
+    ) {
+      return;
+    }
+
+    const retryTimeText =
+      `${hour}:${String(minute).padStart(2, "0")} ` +
+      match[3].toUpperCase();
+
+    if (retryTimeText === lastReported) return;
+    lastReported = retryTimeText;
+
+    browser.runtime.sendMessage({
+      type: "QUOTA_DIAGNOSTIC_PAGE",
+      outOfImages: true,
+      retryRelativeDay: "tomorrow",
+      retryTimeText
+    }).catch(() => {});
+  }
+
+  const observer = new MutationObserver(
+    checkVisibleImageLimit
+  );
+
+  function start() {
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+
+    checkVisibleImageLimit();
+  }
+
+  if (document.body) {
+    start();
+  } else {
+    document.addEventListener(
+      "DOMContentLoaded",
+      start,
+      { once: true }
+    );
+  }
+})();
