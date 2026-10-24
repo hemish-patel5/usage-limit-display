@@ -1,3 +1,5 @@
+mod image_limit;
+
 
 use axum::{
     extract::State,
@@ -424,6 +426,7 @@ async fn main() -> AppResult<()> {
         .route("/health", get(health_handler))
         .route("/usage", get(usage_handler))
         .route("/images", get(images_handler))
+        .route("/image-limit", get(image_limit::read_limit))
         .with_state(state);
 
     // Separate server for incoming Firefox updates.
@@ -441,6 +444,10 @@ async fn main() -> AppResult<()> {
         .route(
             "/images/update",
             axum::routing::post(images_update_handler),
+        )
+        .route(
+            "/images/limit-update",
+            axum::routing::post(image_limit::update_limit),
         )
         .layer(cors);
 
