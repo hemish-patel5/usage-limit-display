@@ -25,6 +25,9 @@ use tokio::{
     time::{sleep, timeout},
 };
 
+use axum::http::{header::CONTENT_TYPE, HeaderName, Method};
+use tower_http::cors::{Any, CorsLayer};
+
 type AppResult<T> =
     Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -425,11 +428,22 @@ async fn main() -> AppResult<()> {
 
     // Separate server for incoming Firefox updates.
     // Only accessible from this laptop.
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::POST])
+        .allow_headers([
+            CONTENT_TYPE,
+            HeaderName::from_static("x-tracker-token"),
+        ]);
+
     let update_app = Router::new()
         .route(
             "/images/update",
             axum::routing::post(images_update_handler),
-        );
+        )
+        .layer(cors);
+
 
     let update_listener = TcpListener::bind(
         "127.0.0.1:8766"
