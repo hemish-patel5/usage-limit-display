@@ -1,0 +1,78 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image Limit Tracker</title>
+  <style>
+    body {
+      width: 280px;
+      padding: 16px;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #171717;
+      color: white;
+    }
+
+    h3 { margin-top: 0; }
+
+    .count {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 10px 0;
+      color: #8ee3ae;
+    }
+
+    .reset { margin-bottom: 14px; }
+
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 9px;
+      margin: 5px 0;
+      border-radius: 6px;
+    }
+
+    input {
+      border: 1px solid #555;
+      background: #292929;
+      color: white;
+    }
+
+    button {
+      border: none;
+      background: #23865c;
+      color: white;
+      cursor: pointer;
+    }
+
+    .status {
+      font-size: 12px;
+      color: #bbb;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <h3>ChatGPT Image Limits</h3>
+
+  <div class="count" id="remaining">-- remaining</div>
+  <div class="reset" id="reset">Reset: unknown</div>
+
+  <button id="refresh">Refresh now</button>
+
+  <hr>
+
+  <input
+    id="token"
+    type="password"
+    placeholder="Rust server token"
+  >
+
+  <button id="save">Save token</button>
+
+  <p class="status" id="status">Not connected</p>
+
+  <script src="popup.js"></script>
+</body>
+</html>
