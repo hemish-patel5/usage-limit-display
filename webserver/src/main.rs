@@ -4,7 +4,12 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use serde::Serialize;
+use axum::{
+    http::{HeaderMap, StatusCode},
+};
+use std::sync::OnceLock;
+use chrono::DateTime;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     error::Error,
@@ -42,6 +47,43 @@ struct UsageResponse {
     weekly: Option<UsageWindow>,
     updated_at: Option<u64>,
     error: Option<String>,
+}
+
+#[derive(Clone, Deserialize)]
+struct ImageUpdate {
+    remaining: u64,
+    reset_after: String,
+}
+
+#[derive(Clone, Serialize)]
+struct ImageResponse {
+    status: String,
+    remaining: Option<u64>,
+    reset_at: Option<i64>,
+    reset_in_seconds: Option<i64>,
+    updated_at: Option<u64>,
+}
+
+static IMAGE_STATE: OnceLock<RwLock<ImageResponse>> =
+    OnceLock::new();
+
+fn image_state() -> &'static RwLock<ImageResponse> {
+    IMAGE_STATE.get_or_init(|| {
+        RwLock::new(ImageResponse {
+            status: "waiting".into(),
+            remaining: None,
+            reset_at: None,
+            reset_in_seconds: None,
+            updated_at: None,
+        })
+    })
+}
+
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 impl Default for UsageResponse {
@@ -320,6 +362,52 @@ async fn usage_handler(
     Json(state.read().await.clone())
 }
 
+async fn images_handler() -> Json<ImageResponse> {
+    let mut response = image_state().read().await.clone();
+
+    response.reset_in_seconds = response.reset_at
+        .map(|reset| (reset - unix_now()).max(0));
+
+    Json(response)
+}
+
+async fn images_update_handler(
+    headers: HeaderMap,
+    Json(update): Json<ImageUpdate>,
+) -> Result<Json<ImageResponse>, StatusCode> {
+    let expected = std::env::var("IMAGE_TRACKER_TOKEN")
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+
+    let received = headers
+        .get("x-tracker-token")
+        .and_then(|value| value.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    if expected.is_empty() || received != expected {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let reset_at = DateTime::parse_from_rfc3339(
+        &update.reset_after
+    )
+    .map_err(|_| StatusCode::BAD_REQUEST)?
+    .timestamp();
+
+    let now = unix_now();
+
+    let response = ImageResponse {
+        status: "ok".into(),
+        remaining: Some(update.remaining),
+        reset_at: Some(reset_at),
+        reset_in_seconds: Some((reset_at - now).max(0)),
+        updated_at: Some(now as u64),
+    };
+
+    *image_state().write().await = response.clone();
+
+    Ok(Json(response))
+}
+
 #[tokio::main]
 async fn main() -> AppResult<()> {
     let state = Arc::new(
@@ -328,10 +416,33 @@ async fn main() -> AppResult<()> {
 
     tokio::spawn(refresh_worker(state.clone()));
 
+    
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/usage", get(usage_handler))
+        .route("/images", get(images_handler))
         .with_state(state);
+
+    // Separate server for incoming Firefox updates.
+    // Only accessible from this laptop.
+    let update_app = Router::new()
+        .route(
+            "/images/update",
+            axum::routing::post(images_update_handler),
+        );
+
+    let update_listener = TcpListener::bind(
+        "127.0.0.1:8766"
+    ).await?;
+
+    tokio::spawn(async move {
+        if let Err(error) =
+            axum::serve(update_listener, update_app).await
+        {
+            eprintln!("Image update server failed: {error}");
+        }
+    });
+
 
     let listener = TcpListener::bind(
         SERVER_ADDRESS
