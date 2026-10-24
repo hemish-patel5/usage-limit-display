@@ -26,7 +26,7 @@ type AppResult<T> =
 type SharedState = Arc<RwLock<UsageResponse>>;
 
 const REFRESH_INTERVAL: u64 = 300;
-const SERVER_ADDRESS: &str = "127.0.0.1:8765";
+const SERVER_ADDRESS: &str = "0.0.0.0:8765";
 
 #[derive(Clone, Serialize)]
 struct UsageWindow {
