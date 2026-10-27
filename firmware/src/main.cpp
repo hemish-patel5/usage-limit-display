@@ -1,122 +1,126 @@
-
 #include <Arduino.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
+#include <time.h>
+
+#include "AppConfig.h"
+#include "DashboardDisplay.h"
+#include "RotaryInput.h"
+#include "UsageClient.h"
 #include "wifi_secrets.h"
 
-const char* SERVER = "http://192.168.1.49:8765";
+DashboardDisplay display(
+  AppConfig::LCD_RS, AppConfig::LCD_ENABLE,
+  AppConfig::LCD_D4, AppConfig::LCD_D5,
+  AppConfig::LCD_D6, AppConfig::LCD_D7);
 
-constexpr unsigned long WIFI_TIMEOUT_MS = 20000;
-constexpr unsigned long WIFI_RETRY_MS = 10000;
+RotaryInput rotary(
+  AppConfig::ENCODER_CLK,
+  AppConfig::ENCODER_DT,
+  AppConfig::ENCODER_SWITCH);
 
+UsageClient usageClient(AppConfig::SERVER_URL);
+
+DashboardScreen currentScreen = DashboardScreen::DateTime;
+unsigned long lastPoll = 0;
 unsigned long lastWifiAttempt = 0;
+unsigned long lastDisplayUpdate = 0;
+bool wifiWasConnected = false;
 
-const char* wifiStatusName(wl_status_t status) {
-  switch (status) {
-    case WL_IDLE_STATUS: return "idle";
-    case WL_NO_SSID_AVAIL: return "SSID not found";
-    case WL_SCAN_COMPLETED: return "scan completed";
-    case WL_CONNECTED: return "connected";
-    case WL_CONNECT_FAILED: return "connection failed (check authentication)";
-    case WL_CONNECTION_LOST: return "connection lost";
-    case WL_DISCONNECTED: return "disconnected";
-    default: return "unknown";
-  }
+void renderDisplay() {
+  display.render(currentScreen, usageClient.data());
 }
 
-void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
-  if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
-    Serial.print("WiFi disconnect reason code: ");
-    Serial.println(info.wifi_sta_disconnected.reason);
-  }
-}
-
-bool connectWiFi() {
-  lastWifiAttempt = millis();
-
-  // Clear any stale connection left in the WiFi driver before trying again.
-  WiFi.disconnect(false, true);
-  delay(100);
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.setAutoReconnect(true);
-
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  const unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT_MS) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println();
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.print("WiFi connection failed: ");
-    Serial.println(wifiStatusName(WiFi.status()));
-    return false;
-  }
-
-  Serial.println("WiFi connected!");
-  Serial.print("ESP32 IP: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("Signal strength: ");
-  Serial.print(WiFi.RSSI());
-  Serial.println(" dBm");
-  return true;
-}
-
-void fetchEndpoint(const char* path) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnected");
+void changeScreen(Rotation rotation) {
+  if (rotation == Rotation::None) {
     return;
   }
 
-  HTTPClient http;
+  constexpr int SCREEN_COUNT = 3;
+  int screen = static_cast<int>(currentScreen);
+  screen += rotation == Rotation::Clockwise ? 1 : -1;
+  screen = (screen + SCREEN_COUNT) % SCREEN_COUNT;
+  currentScreen = static_cast<DashboardScreen>(screen);
+  renderDisplay();
+}
 
-  String url = String(SERVER) + path;
+void handleButton(ButtonAction action) {
+  if (action == ButtonAction::ShortPress) {
+    usageClient.fetch();
+    lastPoll = millis();
+    renderDisplay();
+  } else if (action == ButtonAction::LongPress) {
+    currentScreen = DashboardScreen::DateTime;
+    renderDisplay();
+  }
+}
 
-  Serial.print("GET ");
-  Serial.println(url);
+void startWiFi() {
+  lastWifiAttempt = millis();
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
 
-  http.begin(url);
-  http.setTimeout(5000);
+void manageWiFi() {
+  const bool connected = WiFi.status() == WL_CONNECTED;
 
-  int status = http.GET();
+  if (connected) {
+    if (!wifiWasConnected) {
+      wifiWasConnected = true;
+      Serial.print("WiFi connected, IP: ");
+      Serial.println(WiFi.localIP());
 
-  Serial.print("HTTP status: ");
-  Serial.println(status);
-
-  if (status == 200) {
-    Serial.println(http.getString());
-  } else {
-    Serial.println("Request failed");
+      configTzTime(AppConfig::TIME_ZONE,
+                   "pool.ntp.org", "time.google.com");
+      usageClient.fetch();
+      lastPoll = millis();
+      renderDisplay();
+    }
+    return;
   }
 
-  http.end();
+  if (wifiWasConnected) {
+    Serial.println("WiFi disconnected");
+    wifiWasConnected = false;
+  }
+
+  if (millis() - lastWifiAttempt >=
+      AppConfig::WIFI_RETRY_INTERVAL_MS) {
+    startWiFi();
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(1500);
+  delay(500);
 
-  WiFi.onEvent(onWiFiEvent);
-  connectWiFi();
+  display.begin();
+  display.showStartup();
+  rotary.begin();
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+
+  display.showConnecting();
+  startWiFi();
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    if (millis() - lastWifiAttempt >= WIFI_RETRY_MS) {
-      connectWiFi();
-    }
-    delay(100);
-    return;
+  changeScreen(rotary.readRotation());
+  handleButton(rotary.readButton());
+  manageWiFi();
+
+  if (WiFi.status() == WL_CONNECTED &&
+      millis() - lastPoll >= AppConfig::POLL_INTERVAL_MS) {
+    usageClient.fetch();
+    lastPoll = millis();
   }
 
-  fetchEndpoint("/usage");
-  fetchEndpoint("/image-limit");
+  if (millis() - lastDisplayUpdate >=
+      AppConfig::DISPLAY_INTERVAL_MS) {
+    lastDisplayUpdate = millis();
+    renderDisplay();
+  }
 
-  Serial.println("----------------");
-
-  delay(10000);
+  delay(2);
 }
