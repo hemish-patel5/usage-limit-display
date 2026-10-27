@@ -24,6 +24,7 @@ DashboardScreen currentScreen = DashboardScreen::DateTime;
 unsigned long lastPoll = 0;
 unsigned long lastWifiAttempt = 0;
 unsigned long lastDisplayUpdate = 0;
+unsigned long lastInteraction = 0;
 bool wifiWasConnected = false;
 
 void renderDisplay() {
@@ -35,21 +36,24 @@ void changeScreen(Rotation rotation) {
     return;
   }
 
-  constexpr int SCREEN_COUNT = 3;
+  constexpr int SCREEN_COUNT = 4;
   int screen = static_cast<int>(currentScreen);
   screen += rotation == Rotation::Clockwise ? 1 : -1;
   screen = (screen + SCREEN_COUNT) % SCREEN_COUNT;
   currentScreen = static_cast<DashboardScreen>(screen);
+  lastInteraction = millis();
   renderDisplay();
 }
 
 void handleButton(ButtonAction action) {
   if (action == ButtonAction::ShortPress) {
+    lastInteraction = millis();
     usageClient.fetch();
     lastPoll = millis();
     renderDisplay();
   } else if (action == ButtonAction::LongPress) {
     currentScreen = DashboardScreen::DateTime;
+    lastInteraction = millis();
     renderDisplay();
   }
 }
@@ -102,6 +106,7 @@ void setup() {
   WiFi.setAutoReconnect(true);
 
   display.showConnecting();
+  lastInteraction = millis();
   startWiFi();
 }
 
@@ -119,6 +124,11 @@ void loop() {
   if (millis() - lastDisplayUpdate >=
       AppConfig::DISPLAY_INTERVAL_MS) {
     lastDisplayUpdate = millis();
+
+    if (millis() - lastInteraction >=
+        AppConfig::AUTO_HOME_INTERVAL_MS) {
+      currentScreen = DashboardScreen::DateTime;
+    }
     renderDisplay();
   }
 

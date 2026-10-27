@@ -54,13 +54,19 @@ bool getJSON(const char* serverUrl, const char* path, JsonDocument& document) {
 UsageClient::UsageClient(const char* serverUrl) : serverUrl_(serverUrl) {}
 
 bool UsageClient::fetch() {
+  const bool usageOK = fetchUsage();
+  const bool imagesOK = fetchImageLimit();
+  return usageOK && imagesOK;
+}
+
+bool UsageClient::fetchUsage() {
   StaticJsonDocument<1024> document;
 
   if (!getJSON(serverUrl_, "/usage", document) ||
       document["status"] != "ok" ||
       document["five_hour"].isNull() ||
       document["weekly"].isNull()) {
-    data_.available = false;
+    data_.usageAvailable = false;
     return false;
   }
 
@@ -72,10 +78,49 @@ bool UsageClient::fetch() {
     document["weekly"]["used_percent"].as<float>();
   data_.weekly.resetAt =
     document["weekly"]["resets_at"].as<long long>();
-  data_.available = true;
+  data_.usageAvailable = true;
 
   Serial.printf("5-hour used: %.1f%%, weekly used: %.1f%%\n",
                 data_.fiveHour.usedPercent, data_.weekly.usedPercent);
+  return true;
+}
+
+bool UsageClient::fetchImageLimit() {
+  StaticJsonDocument<768> document;
+
+  if (!getJSON(serverUrl_, "/image-limit", document)) {
+    data_.images.serverAvailable = false;
+    return false;
+  }
+
+  const char* status = document["status"] | "unknown";
+  ImageLimitStatus parsedStatus;
+
+  if (strcmp(status, "limit_reached") == 0) {
+    if (!document["reset_in_seconds"].is<unsigned long>()) {
+      data_.images.serverAvailable = false;
+      return false;
+    }
+    parsedStatus = ImageLimitStatus::LimitReached;
+  } else if (strcmp(status, "reset_time_passed") == 0) {
+    parsedStatus = ImageLimitStatus::ResetTimePassed;
+  } else if (strcmp(status, "available") == 0) {
+    parsedStatus = ImageLimitStatus::Available;
+  } else if (strcmp(status, "unknown") == 0) {
+    parsedStatus = ImageLimitStatus::Unknown;
+  } else {
+    data_.images.serverAvailable = false;
+    return false;
+  }
+
+  data_.images.status = parsedStatus;
+  data_.images.remainingAtFetch =
+    document["reset_in_seconds"] | 0UL;
+  data_.images.fetchedAtMillis = millis();
+  data_.images.serverAvailable = true;
+
+  Serial.printf("Image limit: %s, reset in %lu seconds\n",
+                status, data_.images.remainingAtFetch);
   return true;
 }
 

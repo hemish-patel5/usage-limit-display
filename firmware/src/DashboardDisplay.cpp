@@ -30,6 +30,9 @@ void DashboardDisplay::render(DashboardScreen screen, const UsageData& usage) {
     case DashboardScreen::Weekly:
       showWeekly(usage);
       break;
+    case DashboardScreen::Images:
+      showImages(usage.images);
+      break;
   }
 }
 
@@ -124,7 +127,7 @@ void DashboardDisplay::showDateTime() {
 }
 
 void DashboardDisplay::showFiveHour(const UsageData& usage) {
-  if (!usage.available) {
+  if (!usage.usageAvailable) {
     displayLines("5H Left: --%", "No usage data");
     return;
   }
@@ -136,7 +139,7 @@ void DashboardDisplay::showFiveHour(const UsageData& usage) {
 }
 
 void DashboardDisplay::showWeekly(const UsageData& usage) {
-  if (!usage.available) {
+  if (!usage.usageAvailable) {
     displayLines("Weekly: --%", "No usage data");
     return;
   }
@@ -145,4 +148,54 @@ void DashboardDisplay::showWeekly(const UsageData& usage) {
     static_cast<int>(roundf(usage.weekly.usedPercent)), 0, 100);
   displayLines("Weekly: " + String(used) + "%",
                weeklyResetText(usage.weekly.resetAt));
+}
+
+String DashboardDisplay::imageResetText(unsigned long seconds) {
+  const unsigned long days = seconds / 86400;
+  const unsigned long hours = (seconds % 86400) / 3600;
+  const unsigned long minutes = (seconds % 3600) / 60;
+  const unsigned long remainingSeconds = seconds % 60;
+
+  if (days > 0) {
+    return "RESET " + String(days) + "D " + String(hours) + "H";
+  }
+  if (hours > 0) {
+    return "RESET " + String(hours) + "H " + String(minutes) + "M";
+  }
+  return "RESET " + String(minutes) + "M " +
+    String(remainingSeconds) + "S";
+}
+
+void DashboardDisplay::showImages(const ImageLimitData& images) {
+  if (!images.serverAvailable) {
+    displayLines("CHATGPT IMAGES", "SERVER OFFLINE");
+    return;
+  }
+
+  switch (images.status) {
+    case ImageLimitStatus::LimitReached: {
+      const unsigned long elapsed =
+        (millis() - images.fetchedAtMillis) / 1000;
+      const unsigned long remaining =
+        elapsed >= images.remainingAtFetch
+          ? 0
+          : images.remainingAtFetch - elapsed;
+
+      if (remaining == 0) {
+        displayLines("RESET TIME PASSED", "CHECK CHATGPT");
+      } else {
+        displayLines("IMAGE LIMIT HIT", imageResetText(remaining));
+      }
+      break;
+    }
+    case ImageLimitStatus::ResetTimePassed:
+      displayLines("RESET TIME PASSED", "CHECK CHATGPT");
+      break;
+    case ImageLimitStatus::Available:
+      displayLines("CHATGPT IMAGES", "AVAILABLE");
+      break;
+    case ImageLimitStatus::Unknown:
+      displayLines("CHATGPT IMAGES", "NO ACTIVE LIMIT");
+      break;
+  }
 }

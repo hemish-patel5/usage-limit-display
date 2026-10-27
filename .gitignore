@@ -1,23 +1,58 @@
-
-# PlatformIO
-**/.pio/
-**/.cache/
-**/.clang_complete
-**/.gcc-flags.json
-.vscode
-# Rust
-**/target/
-
-# Editor / OS
-.DS_Store
-*.swp
-
-# Local configuration and secrets
+# Secrets and local environment configuration
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
+# PlatformIO build output and generated metadata
+.pio/
+.pioenvs/
+.piolibdeps/
+**/.pio/
+**/.pioenvs/
+**/.piolibdeps/
+compile_commands.json
+**/compile_commands.json
+*.bin
+*.elf
+*.hex
+*.map
 
-/firefox-extension
+# C/C++ language-server caches
+.cache/
+**/.cache/
+.clangd/
+**/.clangd/
 
+# Rust build output
+target/
+**/target/
+
+# Visual Studio Code workspace state
+.vscode/
+**/.vscode/
+
+# Application runtime state
 image-limit-state.json
+**/image-limit-state.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*~
+
+# Editor swap files
+*.swp
+*.swo
+
+# Operating-system metadata
+.DS_Store
+**/.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep the Firefox extension local
+/firefox-extension/

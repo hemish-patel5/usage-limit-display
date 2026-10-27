@@ -10,6 +10,7 @@ constexpr char TIME_ZONE[] = "NZST-12NZDT,M9.5.0,M4.1.0/3";
 constexpr unsigned long POLL_INTERVAL_MS = 30000;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 constexpr unsigned long DISPLAY_INTERVAL_MS = 250;
+constexpr unsigned long AUTO_HOME_INTERVAL_MS = 30000;
 
 // 1602A LCD in 4-bit mode: RS, EN, D4, D5, D6, D7.
 constexpr uint8_t LCD_RS = 0;

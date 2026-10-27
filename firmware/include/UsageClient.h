@@ -12,4 +12,7 @@ class UsageClient {
  private:
   const char* serverUrl_;
   UsageData data_;
+
+  bool fetchUsage();
+  bool fetchImageLimit();
 };

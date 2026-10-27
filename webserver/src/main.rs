@@ -1,17 +1,12 @@
 mod image_limit;
 
-
 use axum::{
-    extract::State,
+    extract::{DefaultBodyLimit, State},
+    http::{header, Method},
     routing::get,
     Json, Router,
 };
-use axum::{
-    http::{HeaderMap, StatusCode},
-};
-use std::sync::OnceLock;
-use chrono::DateTime;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
     error::Error,
@@ -26,12 +21,9 @@ use tokio::{
     sync::RwLock,
     time::{sleep, timeout},
 };
-
-use axum::http::{header::CONTENT_TYPE, HeaderName, Method};
 use tower_http::cors::{Any, CorsLayer};
 
-type AppResult<T> =
-    Result<T, Box<dyn Error + Send + Sync>>;
+type AppResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 type SharedState = Arc<RwLock<UsageResponse>>;
 
@@ -52,43 +44,6 @@ struct UsageResponse {
     weekly: Option<UsageWindow>,
     updated_at: Option<u64>,
     error: Option<String>,
-}
-
-#[derive(Clone, Deserialize)]
-struct ImageUpdate {
-    remaining: u64,
-    reset_after: String,
-}
-
-#[derive(Clone, Serialize)]
-struct ImageResponse {
-    status: String,
-    remaining: Option<u64>,
-    reset_at: Option<i64>,
-    reset_in_seconds: Option<i64>,
-    updated_at: Option<u64>,
-}
-
-static IMAGE_STATE: OnceLock<RwLock<ImageResponse>> =
-    OnceLock::new();
-
-fn image_state() -> &'static RwLock<ImageResponse> {
-    IMAGE_STATE.get_or_init(|| {
-        RwLock::new(ImageResponse {
-            status: "waiting".into(),
-            remaining: None,
-            reset_at: None,
-            reset_in_seconds: None,
-            updated_at: None,
-        })
-    })
-}
-
-fn unix_now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
 }
 
 impl Default for UsageResponse {
@@ -120,11 +75,9 @@ impl CodexClient {
             .kill_on_drop(true)
             .spawn()?;
 
-        let stdin = child.stdin.take()
-            .ok_or("Missing stdin")?;
+        let stdin = child.stdin.take().ok_or("Missing stdin")?;
 
-        let stdout = child.stdout.take()
-            .ok_or("Missing stdout")?;
+        let stdout = child.stdout.take().ok_or("Missing stdout")?;
 
         let mut client = Self {
             _child: child,
@@ -134,29 +87,30 @@ impl CodexClient {
         };
 
         // Initialize the Codex JSON-RPC connection.
-        client.request(
-            "initialize",
-            Some(json!({
-                "clientInfo": {
-                    "name": "usage_limit_tracker",
-                    "title": "Usage Limit Tracker",
-                    "version": "0.1.0"
-                }
-            })),
-        ).await?;
+        client
+            .request(
+                "initialize",
+                Some(json!({
+                    "clientInfo": {
+                        "name": "usage_limit_tracker",
+                        "title": "Usage Limit Tracker",
+                        "version": "0.1.0"
+                    }
+                })),
+            )
+            .await?;
 
-        client.write_message(&json!({
-            "method": "initialized",
-            "params": {}
-        })).await?;
+        client
+            .write_message(&json!({
+                "method": "initialized",
+                "params": {}
+            }))
+            .await?;
 
         Ok(client)
     }
 
-    async fn write_message(
-        &mut self,
-        message: &Value,
-    ) -> AppResult<()> {
+    async fn write_message(&mut self, message: &Value) -> AppResult<()> {
         let mut bytes = serde_json::to_vec(message)?;
         bytes.push(b'\n');
 
@@ -166,11 +120,7 @@ impl CodexClient {
         Ok(())
     }
 
-    async fn request(
-        &mut self,
-        method: &str,
-        params: Option<Value>,
-    ) -> AppResult<Value> {
+    async fn request(&mut self, method: &str, params: Option<Value>) -> AppResult<Value> {
         self.request_id += 1;
         let id = self.request_id;
 
@@ -188,18 +138,13 @@ impl CodexClient {
         loop {
             let mut line = String::new();
 
-            let count = self.stdout
-                .read_line(&mut line)
-                .await?;
+            let count = self.stdout.read_line(&mut line).await?;
 
             if count == 0 {
-                return Err(
-                    "Codex App Server disconnected".into()
-                );
+                return Err("Codex App Server disconnected".into());
             }
 
-            let response: Value =
-                serde_json::from_str(&line)?;
+            let response: Value = serde_json::from_str(&line)?;
 
             // Ignore unrelated notifications.
             if response.get("id") != Some(&json!(id)) {
@@ -207,24 +152,15 @@ impl CodexClient {
             }
 
             if let Some(error) = response.get("error") {
-                return Err(
-                    format!("Codex error: {error}").into()
-                );
+                return Err(format!("Codex error: {error}").into());
             }
 
-            return Ok(
-                response.get("result")
-                    .cloned()
-                    .unwrap_or(Value::Null)
-            );
+            return Ok(response.get("result").cloned().unwrap_or(Value::Null));
         }
     }
 
     async fn get_usage(&mut self) -> AppResult<UsageResponse> {
-        let result = self.request(
-            "account/rateLimits/read",
-            None,
-        ).await?;
+        let result = self.request("account/rateLimits/read", None).await?;
 
         // Prefer the named Codex bucket when present.
         let limits = result
@@ -232,17 +168,12 @@ impl CodexClient {
             .or_else(|| result.get("rateLimits"))
             .ok_or("No rate limits returned")?;
 
-        let windows = [
-            limits.get("primary"),
-            limits.get("secondary"),
-        ];
+        let windows = [limits.get("primary"), limits.get("secondary")];
 
         let five_hour = find_window(&windows, 300);
         let weekly = find_window(&windows, 10080);
 
-        let updated_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs();
+        let updated_at = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
         Ok(UsageResponse {
             status: "ok".into(),
@@ -254,60 +185,41 @@ impl CodexClient {
     }
 }
 
-fn find_window(
-    windows: &[Option<&Value>],
-    duration: u64,
-) -> Option<UsageWindow> {
-    windows.iter()
-        .flatten()
-        .find_map(|window| {
-            let minutes = window
-                .get("windowDurationMins")?
-                .as_u64()?;
+fn find_window(windows: &[Option<&Value>], duration: u64) -> Option<UsageWindow> {
+    windows.iter().flatten().find_map(|window| {
+        let minutes = window.get("windowDurationMins")?.as_u64()?;
 
-            if minutes != duration {
-                return None;
-            }
+        if minutes != duration {
+            return None;
+        }
 
-            Some(UsageWindow {
-                used_percent: window
-                    .get("usedPercent")?
-                    .as_f64()?,
-                resets_at: window
-                    .get("resetsAt")
-                    .and_then(Value::as_i64),
-                window_duration_mins: minutes,
-            })
+        Some(UsageWindow {
+            used_percent: window.get("usedPercent")?.as_f64()?,
+            resets_at: window.get("resetsAt").and_then(Value::as_i64),
+            window_duration_mins: minutes,
         })
+    })
 }
 
 async fn refresh_worker(state: SharedState) {
     loop {
         println!("Connecting to Codex...");
 
-        let connection = timeout(
-            Duration::from_secs(20),
-            CodexClient::connect(),
-        ).await;
+        let connection = timeout(Duration::from_secs(20), CodexClient::connect()).await;
 
         match connection {
             Ok(Ok(mut client)) => {
                 println!("Codex connected!");
 
                 loop {
-                    let result = timeout(
-                        Duration::from_secs(30),
-                        client.get_usage(),
-                    ).await;
+                    let result = timeout(Duration::from_secs(30), client.get_usage()).await;
 
                     match result {
                         Ok(Ok(usage)) => {
                             println!(
                                 "Usage refreshed: 5h={:?}, weekly={:?}",
-                                usage.five_hour.as_ref()
-                                    .map(|w| w.used_percent),
-                                usage.weekly.as_ref()
-                                    .map(|w| w.used_percent)
+                                usage.five_hour.as_ref().map(|w| w.used_percent),
+                                usage.weekly.as_ref().map(|w| w.used_percent)
                             );
 
                             *state.write().await = usage;
@@ -329,9 +241,7 @@ async fn refresh_worker(state: SharedState) {
                         }
                     }
 
-                    sleep(
-                        Duration::from_secs(REFRESH_INTERVAL)
-                    ).await;
+                    sleep(Duration::from_secs(REFRESH_INTERVAL)).await;
                 }
             }
             other => {
@@ -361,113 +271,53 @@ async fn health_handler() -> Json<Value> {
     }))
 }
 
-async fn usage_handler(
-    State(state): State<SharedState>,
-) -> Json<UsageResponse> {
+async fn usage_handler(State(state): State<SharedState>) -> Json<UsageResponse> {
     Json(state.read().await.clone())
-}
-
-async fn images_handler() -> Json<ImageResponse> {
-    let mut response = image_state().read().await.clone();
-
-    response.reset_in_seconds = response.reset_at
-        .map(|reset| (reset - unix_now()).max(0));
-
-    Json(response)
-}
-
-async fn images_update_handler(
-    headers: HeaderMap,
-    Json(update): Json<ImageUpdate>,
-) -> Result<Json<ImageResponse>, StatusCode> {
-    let expected = std::env::var("IMAGE_TRACKER_TOKEN")
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-
-    let received = headers
-        .get("x-tracker-token")
-        .and_then(|value| value.to_str().ok())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    if expected.is_empty() || received != expected {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    let reset_at = DateTime::parse_from_rfc3339(
-        &update.reset_after
-    )
-    .map_err(|_| StatusCode::BAD_REQUEST)?
-    .timestamp();
-
-    let now = unix_now();
-
-    let response = ImageResponse {
-        status: "ok".into(),
-        remaining: Some(update.remaining),
-        reset_at: Some(reset_at),
-        reset_in_seconds: Some((reset_at - now).max(0)),
-        updated_at: Some(now as u64),
-    };
-
-    *image_state().write().await = response.clone();
-
-    Ok(Json(response))
 }
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
-    let state = Arc::new(
-        RwLock::new(UsageResponse::default())
-    );
+    let state = Arc::new(RwLock::new(UsageResponse::default()));
 
     tokio::spawn(refresh_worker(state.clone()));
 
-    
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/usage", get(usage_handler))
-        .route("/images", get(images_handler))
         .route("/image-limit", get(image_limit::read_limit))
         .with_state(state);
 
     // Separate server for incoming Firefox updates.
     // Only accessible from this laptop.
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([Method::POST])
-        .allow_headers([
-            CONTENT_TYPE,
-            HeaderName::from_static("x-tracker-token"),
-        ]);
-
     let update_app = Router::new()
         .route(
-            "/images/update",
-            axum::routing::post(images_update_handler),
-        )
-        .route(
             "/images/limit-update",
-            axum::routing::post(image_limit::update_limit),
+            axum::routing::post(image_limit::update_limit).delete(image_limit::clear_limit),
         )
-        .layer(cors);
+        // This listener is loopback-only and every state-changing request is
+        // authenticated. CORS is needed because Firefox extension pages have
+        // a generated moz-extension:// origin and send a preflight request.
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([Method::POST, Method::DELETE])
+                .allow_headers([
+                    header::CONTENT_TYPE,
+                    header::HeaderName::from_static("x-tracker-token"),
+                ]),
+        )
+        .layer(DefaultBodyLimit::max(1024));
 
-
-    let update_listener = TcpListener::bind(
-        "127.0.0.1:8766"
-    ).await?;
+    let update_listener = TcpListener::bind("127.0.0.1:8766").await?;
 
     tokio::spawn(async move {
-        if let Err(error) =
-            axum::serve(update_listener, update_app).await
-        {
+        if let Err(error) = axum::serve(update_listener, update_app).await {
             eprintln!("Image update server failed: {error}");
         }
     });
 
-
-    let listener = TcpListener::bind(
-        SERVER_ADDRESS
-    ).await?;
+    let listener = TcpListener::bind(SERVER_ADDRESS).await?;
 
     println!("================================");
     println!("  Codex Usage Limit Tracker");

@@ -7,8 +7,23 @@ struct UsageWindow {
   time_t resetAt = 0;
 };
 
+enum class ImageLimitStatus {
+  Unknown,
+  LimitReached,
+  ResetTimePassed,
+  Available,
+};
+
+struct ImageLimitData {
+  ImageLimitStatus status = ImageLimitStatus::Unknown;
+  unsigned long remainingAtFetch = 0;
+  unsigned long fetchedAtMillis = 0;
+  bool serverAvailable = false;
+};
+
 struct UsageData {
   UsageWindow fiveHour;
   UsageWindow weekly;
-  bool available = false;
+  ImageLimitData images;
+  bool usageAvailable = false;
 };

@@ -9,6 +9,7 @@ enum class DashboardScreen : uint8_t {
   DateTime = 0,
   FiveHour = 1,
   Weekly = 2,
+  Images = 3,
 };
 
 class DashboardDisplay {
@@ -30,10 +31,12 @@ class DashboardDisplay {
   void showDateTime();
   void showFiveHour(const UsageData& usage);
   void showWeekly(const UsageData& usage);
+  void showImages(const ImageLimitData& images);
 
   static String fit16(String value);
   static bool clockIsSynced();
   static unsigned long secondsUntil(time_t target);
   static String fiveHourResetText(time_t resetAt);
   static String weeklyResetText(time_t resetAt);
+  static String imageResetText(unsigned long seconds);
 };
