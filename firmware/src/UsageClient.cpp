@@ -56,7 +56,29 @@ UsageClient::UsageClient(const char* serverUrl) : serverUrl_(serverUrl) {}
 bool UsageClient::fetch() {
   const bool usageOK = fetchUsage();
   const bool imagesOK = fetchImageLimit();
-  return usageOK && imagesOK;
+  const bool performanceOK = fetchPerformance();
+  return usageOK && imagesOK && performanceOK;
+}
+
+bool UsageClient::fetchPerformance() {
+  StaticJsonDocument<384> document;
+
+  if (!getJSON(serverUrl_, "/performance", document) ||
+      document["status"] != "ok" ||
+      !document["cpu_percent"].is<float>() ||
+      !document["ram_percent"].is<float>()) {
+    data_.performance.available = false;
+    return false;
+  }
+
+  data_.performance.cpuPercent = document["cpu_percent"].as<float>();
+  data_.performance.ramPercent = document["ram_percent"].as<float>();
+  data_.performance.available = true;
+
+  Serial.printf("PC performance: CPU %.1f%%, RAM %.1f%%\n",
+                data_.performance.cpuPercent,
+                data_.performance.ramPercent);
+  return true;
 }
 
 bool UsageClient::fetchUsage() {

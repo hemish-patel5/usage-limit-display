@@ -7,6 +7,7 @@ class UsageClient {
   explicit UsageClient(const char* serverUrl);
 
   bool fetch();
+  bool fetchPerformance();
   const UsageData& data() const;
 
  private:

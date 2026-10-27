@@ -85,6 +85,7 @@ The LAN-facing server listens on `0.0.0.0:8765`:
 GET /health
 GET /usage
 GET /image-limit
+GET /performance
 ```
 
 The authenticated write server listens only on `127.0.0.1:8766`:

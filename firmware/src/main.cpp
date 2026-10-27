@@ -22,6 +22,7 @@ UsageClient usageClient(AppConfig::SERVER_URL);
 
 DashboardScreen currentScreen = DashboardScreen::DateTime;
 unsigned long lastPoll = 0;
+unsigned long lastPerformancePoll = 0;
 unsigned long lastWifiAttempt = 0;
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastInteraction = 0;
@@ -36,7 +37,7 @@ void changeScreen(Rotation rotation) {
     return;
   }
 
-  constexpr int SCREEN_COUNT = 4;
+  constexpr int SCREEN_COUNT = 5;
   int screen = static_cast<int>(currentScreen);
   screen += rotation == Rotation::Clockwise ? 1 : -1;
   screen = (screen + SCREEN_COUNT) % SCREEN_COUNT;
@@ -77,6 +78,7 @@ void manageWiFi() {
                    "pool.ntp.org", "time.google.com");
       usageClient.fetch();
       lastPoll = millis();
+      lastPerformancePoll = millis();
       renderDisplay();
     }
     return;
@@ -119,6 +121,13 @@ void loop() {
       millis() - lastPoll >= AppConfig::POLL_INTERVAL_MS) {
     usageClient.fetch();
     lastPoll = millis();
+  }
+
+  if (WiFi.status() == WL_CONNECTED &&
+      millis() - lastPerformancePoll >=
+        AppConfig::PERFORMANCE_POLL_INTERVAL_MS) {
+    usageClient.fetchPerformance();
+    lastPerformancePoll = millis();
   }
 
   if (millis() - lastDisplayUpdate >=

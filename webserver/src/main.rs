@@ -1,4 +1,5 @@
 mod image_limit;
+mod performance_monitor;
 
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -280,11 +281,13 @@ async fn main() -> AppResult<()> {
     let state = Arc::new(RwLock::new(UsageResponse::default()));
 
     tokio::spawn(refresh_worker(state.clone()));
+    tokio::spawn(performance_monitor::refresh_worker());
 
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/usage", get(usage_handler))
         .route("/image-limit", get(image_limit::read_limit))
+        .route("/performance", get(performance_monitor::read_performance))
         .with_state(state);
 
     // Separate server for incoming Firefox updates.
@@ -325,6 +328,7 @@ async fn main() -> AppResult<()> {
     println!("Server: http://{SERVER_ADDRESS}");
     println!("Health: /health");
     println!("Usage:  /usage");
+    println!("Performance: /performance");
     println!("Refresh: every 5 minutes");
 
     axum::serve(listener, app).await?;

@@ -21,7 +21,14 @@ struct ImageLimitData {
   bool serverAvailable = false;
 };
 
+struct PerformanceData {
+  float cpuPercent = 0.0f;
+  float ramPercent = 0.0f;
+  bool available = false;
+};
+
 struct UsageData {
+  PerformanceData performance;
   UsageWindow fiveHour;
   UsageWindow weekly;
   ImageLimitData images;

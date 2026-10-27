@@ -7,9 +7,10 @@
 
 enum class DashboardScreen : uint8_t {
   DateTime = 0,
-  FiveHour = 1,
-  Weekly = 2,
-  Images = 3,
+  Performance = 1,
+  FiveHour = 2,
+  Weekly = 3,
+  Images = 4,
 };
 
 class DashboardDisplay {
@@ -29,6 +30,7 @@ class DashboardDisplay {
 
   void displayLines(String line1, String line2);
   void showDateTime();
+  void showPerformance(const PerformanceData& performance);
   void showFiveHour(const UsageData& usage);
   void showWeekly(const UsageData& usage);
   void showImages(const ImageLimitData& images);
@@ -39,4 +41,5 @@ class DashboardDisplay {
   static String fiveHourResetText(time_t resetAt);
   static String weeklyResetText(time_t resetAt);
   static String imageResetText(unsigned long seconds);
+  static String performanceLine(const char* label, float percent);
 };

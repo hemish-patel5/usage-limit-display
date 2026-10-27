@@ -9,6 +9,17 @@ DashboardDisplay::DashboardDisplay(uint8_t rs, uint8_t enable, uint8_t d4,
 
 void DashboardDisplay::begin() {
   lcd_.begin(16, 2);
+
+  uint8_t fullBlock[8] = {
+    0b11111, 0b11111, 0b11111, 0b11111,
+    0b11111, 0b11111, 0b11111, 0b11111
+  };
+  uint8_t shadeBlock[8] = {
+    0b10101, 0b01010, 0b10101, 0b01010,
+    0b10101, 0b01010, 0b10101, 0b01010
+  };
+  lcd_.createChar(1, fullBlock);
+  lcd_.createChar(2, shadeBlock);
 }
 
 void DashboardDisplay::showStartup() {
@@ -24,6 +35,9 @@ void DashboardDisplay::render(DashboardScreen screen, const UsageData& usage) {
     case DashboardScreen::DateTime:
       showDateTime();
       break;
+    case DashboardScreen::Performance:
+      showPerformance(usage.performance);
+      break;
     case DashboardScreen::FiveHour:
       showFiveHour(usage);
       break;
@@ -34,6 +48,31 @@ void DashboardDisplay::render(DashboardScreen screen, const UsageData& usage) {
       showImages(usage.images);
       break;
   }
+}
+
+String DashboardDisplay::performanceLine(const char* label, float percent) {
+  const int rounded = constrain(static_cast<int>(roundf(percent)), 0, 100);
+  const int filled = constrain(
+    static_cast<int>(roundf(rounded * 7.0f / 100.0f)), 0, 7);
+
+  char prefix[10];
+  snprintf(prefix, sizeof(prefix), "%s %3d%% ", label, rounded);
+  String line(prefix);
+  for (int index = 0; index < 7; ++index) {
+    line += static_cast<char>(index < filled ? 1 : 2);
+  }
+  return line;
+}
+
+void DashboardDisplay::showPerformance(
+    const PerformanceData& performance) {
+  if (!performance.available) {
+    displayLines("CPU  --% -------", "RAM  --% -------");
+    return;
+  }
+
+  displayLines(performanceLine("CPU", performance.cpuPercent),
+               performanceLine("RAM", performance.ramPercent));
 }
 
 String DashboardDisplay::fit16(String value) {

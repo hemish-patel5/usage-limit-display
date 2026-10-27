@@ -8,6 +8,7 @@ constexpr char SERVER_URL[] = "http://192.168.1.49:8765";
 constexpr char TIME_ZONE[] = "NZST-12NZDT,M9.5.0,M4.1.0/3";
 
 constexpr unsigned long POLL_INTERVAL_MS = 30000;
+constexpr unsigned long PERFORMANCE_POLL_INTERVAL_MS = 2000;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 constexpr unsigned long DISPLAY_INTERVAL_MS = 250;
 constexpr unsigned long AUTO_HOME_INTERVAL_MS = 30000;
