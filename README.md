@@ -3,6 +3,8 @@
 A local usage dashboard built with an ESP32-C3 SuperMini, 16x2 LCD, KY-040
 rotary encoder, Rust/Axum server, and Firefox extension.
 
+<img width="4032" height="3024" alt="IMG_8709" src="https://github.com/user-attachments/assets/79a296bb-c87b-45f9-94b4-d631416b650a" />
+
 It displays:
 
 - Current New Zealand date and time
