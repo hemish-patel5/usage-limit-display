@@ -27,6 +27,14 @@ unsigned long lastWifiAttempt = 0;
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastInteraction = 0;
 bool wifiWasConnected = false;
+bool timeSyncReported = false;
+
+void handleWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+  if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+    Serial.printf("WiFi disconnected, reason: %u\n",
+                  info.wifi_sta_disconnected.reason);
+  }
+}
 
 void renderDisplay() {
   display.render(currentScreen, usageClient.data());
@@ -106,6 +114,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
+  WiFi.onEvent(handleWiFiEvent);
 
   display.showConnecting();
   lastInteraction = millis();
@@ -116,6 +125,11 @@ void loop() {
   changeScreen(rotary.readRotation());
   handleButton(rotary.readButton());
   manageWiFi();
+
+  if (!timeSyncReported && time(nullptr) > 1700000000) {
+    timeSyncReported = true;
+    Serial.println("System clock synchronized");
+  }
 
   if (WiFi.status() == WL_CONNECTED &&
       millis() - lastPoll >= AppConfig::POLL_INTERVAL_MS) {
