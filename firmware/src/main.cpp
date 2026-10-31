@@ -59,6 +59,7 @@ void handleButton(ButtonAction action) {
     lastInteraction = millis();
     usageClient.fetch();
     lastPoll = millis();
+    lastPerformancePoll = millis();
     renderDisplay();
   } else if (action == ButtonAction::LongPress) {
     currentScreen = DashboardScreen::DateTime;
@@ -112,7 +113,7 @@ void setup() {
   rotary.begin();
 
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
+  WiFi.setSleep(true);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(handleWiFiEvent);
 
@@ -135,6 +136,7 @@ void loop() {
       millis() - lastPoll >= AppConfig::POLL_INTERVAL_MS) {
     usageClient.fetch();
     lastPoll = millis();
+    lastPerformancePoll = millis();
   }
 
   if (WiFi.status() == WL_CONNECTED &&
