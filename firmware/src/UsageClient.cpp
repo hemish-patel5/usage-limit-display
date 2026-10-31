@@ -56,8 +56,7 @@ UsageClient::UsageClient(const char* serverUrl) : serverUrl_(serverUrl) {}
 bool UsageClient::fetch() {
   const bool usageOK = fetchUsage();
   const bool imagesOK = fetchImageLimit();
-  const bool performanceOK = fetchPerformance();
-  return usageOK && imagesOK && performanceOK;
+  return usageOK && imagesOK;
 }
 
 bool UsageClient::fetchPerformance() {

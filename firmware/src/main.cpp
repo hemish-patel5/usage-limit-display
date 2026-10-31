@@ -40,6 +40,12 @@ void renderDisplay() {
   display.render(currentScreen, usageClient.data());
 }
 
+unsigned long performancePollInterval() {
+  return currentScreen == DashboardScreen::Performance
+    ? AppConfig::PERFORMANCE_ACTIVE_POLL_INTERVAL_MS
+    : AppConfig::PERFORMANCE_BACKGROUND_POLL_INTERVAL_MS;
+}
+
 void changeScreen(Rotation rotation) {
   if (rotation == Rotation::None) {
     return;
@@ -58,6 +64,7 @@ void handleButton(ButtonAction action) {
   if (action == ButtonAction::ShortPress) {
     lastInteraction = millis();
     usageClient.fetch();
+    usageClient.fetchPerformance();
     lastPoll = millis();
     lastPerformancePoll = millis();
     renderDisplay();
@@ -86,6 +93,7 @@ void manageWiFi() {
       configTzTime(AppConfig::TIME_ZONE,
                    "pool.ntp.org", "time.google.com");
       usageClient.fetch();
+      usageClient.fetchPerformance();
       lastPoll = millis();
       lastPerformancePoll = millis();
       renderDisplay();
@@ -107,6 +115,12 @@ void manageWiFi() {
 void setup() {
   Serial.begin(115200);
   delay(500);
+
+  if (!setCpuFrequencyMhz(AppConfig::CPU_FREQUENCY_MHZ)) {
+    Serial.println("Unable to lower CPU frequency");
+  } else {
+    Serial.printf("CPU frequency: %u MHz\n", getCpuFrequencyMhz());
+  }
 
   display.begin();
   display.showStartup();
@@ -136,12 +150,11 @@ void loop() {
       millis() - lastPoll >= AppConfig::POLL_INTERVAL_MS) {
     usageClient.fetch();
     lastPoll = millis();
-    lastPerformancePoll = millis();
   }
 
   if (WiFi.status() == WL_CONNECTED &&
       millis() - lastPerformancePoll >=
-        AppConfig::PERFORMANCE_POLL_INTERVAL_MS) {
+        performancePollInterval()) {
     usageClient.fetchPerformance();
     lastPerformancePoll = millis();
   }
@@ -157,5 +170,5 @@ void loop() {
     renderDisplay();
   }
 
-  delay(2);
+  delay(AppConfig::MAIN_LOOP_DELAY_MS);
 }
