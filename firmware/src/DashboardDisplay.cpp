@@ -185,7 +185,7 @@ void DashboardDisplay::showWeekly(const UsageData& usage) {
 
   const int used = constrain(
     static_cast<int>(roundf(usage.weekly.usedPercent)), 0, 100);
-  displayLines("Weekly: " + String(used) + "%",
+  displayLines("Weekly: " + String(100 - used) + "%",
                weeklyResetText(usage.weekly.resetAt));
 }
 
