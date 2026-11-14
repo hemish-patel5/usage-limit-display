@@ -3,7 +3,7 @@
 A local usage dashboard built with an ESP32-C3 SuperMini, 16x2 LCD, KY-040
 rotary encoder, Rust/Axum server, and Firefox extension.
 
-<img width="2390" height="1792" alt="display" src="https://github.com/user-attachments/assets/fb04b049-54b6-4149-bf16-b0697cf970fd" />
+<img width="1448" height="1086" alt="display" src="https://github.com/user-attachments/assets/409e79c1-3e8a-43be-9836-fd23d87d1d6c" />
 
 It displays:
 
